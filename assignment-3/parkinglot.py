@@ -91,21 +91,42 @@ class ParkingLotTopo(Topo):
 
         # Switch ports 1:uplink 2:hostlink 3:downlink
         uplink, hostlink, downlink = 1, 2, 3
-
+	
         # The following template code creates a parking lot topology
         # for N = 1
         # TODO: Replace the template code to create a parking lot topology for any arbitrary N (>= 1)
-        # Begin: Template code
-        s1 = self.addSwitch('s1')
-        h1 = self.addHost('h1', **hconfig)
+
+	if n < 1:
+            return false
+
+        switchList = []
+        hostList = []
+
+        for i in range(n):
+            switchNum = 's%s' % (i+1)
+            hostNum = 'h%s' % (i+1)
+
+            switchList.append(self.addSwitch(switchNum))
+            hostList.append(self.addHost(hostNum, **hconfig))
+
+            self.addLink(hostList[i], switchList[i], port1=0, port2=hostlink, **lconfig)
+
+            if i>0:
+                self.addLink(switchList[i-1], switchList[i], port1=downlink, port2=uplink, **lconfig)
+
+        self.addLink(receiver, switchList[0], port1=0, port2=uplink, **lconfig)
+				 
+	# Begin: Template code
+        #s1 = self.addSwitch('s1')
+        #h1 = self.addHost('h1', **hconfig)
 
         # Wire up receiver
-        self.addLink(receiver, s1,
-                      port1=0, port2=uplink, **lconfig)
+        #self.addLink(receiver, s1,
+                      #port1=0, port2=uplink, **lconfig)
 
         # Wire up clients:
-        self.addLink(h1, s1,
-                      port1=0, port2=hostlink, **lconfig)
+        #self.addLink(h1, s1,
+                      #port1=0, port2=hostlink, **lconfig)
 
         # Uncomment the next 8 lines to create a N = 3 parking lot topology
         #s2 = self.addSwitch('s2')
@@ -162,21 +183,38 @@ def run_parkinglot_expt(net, n):
 
     # Get receiver and clients
     recvr = net.getNodeByName('receiver')
-    sender1 = net.getNodeByName('h1')
+    #sender1 = net.getNodeByName('h1')
 
     # Start the receiver
     port = 5001
     recvr.cmd('iperf -s -p', port,
               '> %s/iperf_server.txt' % args.dir, '&')
 
-    waitListening(sender1, recvr, port)
+    #waitListening(sender1, recvr, port)
 
     # TODO: start the sender iperf processes and wait for the flows to finish
     # Hint: Use getNodeByName() to get a handle on each sender.
-    # Hint: Use sendCmd() and waitOutput() to start iperf and wait for them to finish
+    # Hint: Use sendCmd() and waitOutput() to start iperf and wait for them to finish	
     # Hint: waitOutput waits for the command to finish allowing you to wait on a particular process on the host
     # iperf command to start flow: 'iperf -c %s -p %s -t %d -i 1 -yc > %s/iperf_%s.txt' % (recvr.IP(), 5001, seconds, args.dir, node_name)
     # Hint (not important): You may use progress(t) to track your experiment progress
+
+    hostList=[]
+
+    for i in range(n):
+        hostList.append(net.getNodeByName('h%s' % (i+1)))
+
+    for i in range(n):
+        waitListening(hostList[i], recvr, port)
+
+    for i in range(n):
+        node_name = 'h%s' % (i+1)
+        hostList[i].sendCmd('iperf -c %s -p %s -t %d -i 1 -yc > %s/iperf_%s.txt' % (recvr.IP(), port, seconds, args.dir, node_name))
+
+    iperfResults = {}
+    progress(seconds)
+    for i in range(n):
+        iperfResults[hostList[i].name] = hostList[i].waitOutput()
 
     recvr.cmd('kill %iperf')
 
